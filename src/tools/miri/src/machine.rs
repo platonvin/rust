@@ -1168,7 +1168,7 @@ impl<'tcx> Machine<'tcx> for MiriMachine<'tcx> {
 
     #[inline(always)]
     fn ignore_optional_overflow_checks(ecx: &MiriInterpCx<'tcx>) -> bool {
-        !ecx.tcx.sess.overflow_checks()
+        !ecx.tcx.sess.is_overflow_checked()
     }
 
     fn check_fn_target_features(

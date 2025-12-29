@@ -41,6 +41,7 @@ use rustc_middle::mir::*;
 use rustc_middle::thir::{self, ExprId, LintLevel, LocalVarId, Param, ParamId, PatKind, Thir};
 use rustc_middle::ty::{self, ScalarInt, Ty, TyCtxt, TypeVisitableExt, TypingMode};
 use rustc_middle::{bug, span_bug};
+use rustc_session::config::OverflowChecks;
 use rustc_session::lint;
 use rustc_span::{Span, Symbol, sym};
 
@@ -173,7 +174,9 @@ struct Builder<'a, 'tcx> {
     def_id: LocalDefId,
     hir_id: HirId,
     parent_module: DefId,
-    check_overflow: bool,
+    check_overflow: OverflowChecks,
+    integer_div_checks: bool,
+    bounds_checks: bool,
     fn_span: Span,
     arg_count: usize,
     coroutine: Option<Box<CoroutineInfo<'tcx>>>,
@@ -753,14 +756,25 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // Some functions always have overflow checks enabled,
         // however, they may not get codegen'd, depending on
         // the settings for the crate they are codegened in.
-        let mut check_overflow = attr::contains_name(attrs, sym::rustc_inherit_overflow_checks);
+        let mut check_overflow = if attr::contains_name(attrs, sym::rustc_inherit_overflow_checks) {
+            OverflowChecks::Checked
+        } else {
+            // Unchecked is NOT the default, it is overriden by `OverflowChecks::restrict_with` down below
+            OverflowChecks::Unchecked
+        };
         // Respect -C overflow-checks.
-        check_overflow |= tcx.sess.overflow_checks();
+        check_overflow.restrict_with(tcx.sess.overflow_checks());
+
         // Constants always need overflow checks.
-        check_overflow |= matches!(
+        if matches!(
             tcx.hir_body_owner_kind(def),
             hir::BodyOwnerKind::Const { .. } | hir::BodyOwnerKind::Static(_)
-        );
+        ) {
+            check_overflow.restrict_with(OverflowChecks::Checked);
+        };
+
+        let bounds_checks = tcx.sess.bounds_checks();
+        let integer_div_checks = tcx.sess.integer_div_checks();
 
         let lint_level = LintLevel::Explicit(hir_id);
         let param_env = tcx.param_env(def);
@@ -774,6 +788,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             hir_id,
             parent_module: tcx.parent_module(hir_id).to_def_id(),
             check_overflow,
+            integer_div_checks,
+            bounds_checks,
             cfg: CFG { basic_blocks: IndexVec::new() },
             fn_span: span,
             arg_count,

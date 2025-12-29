@@ -18,6 +18,7 @@ use rustc_target::spec::{
     RelocModel, RelroLevel, SanitizerSet, SplitDebuginfo, StackProtector, SymbolVisibility,
     TargetTuple, TlsModel,
 };
+pub use rustc_target::spec::{FloatMathMode, OverflowChecks};
 
 use crate::config::*;
 use crate::search_paths::SearchPath;
@@ -808,6 +809,10 @@ mod desc {
     pub(crate) const parse_on_broken_pipe: &str = "either `kill`, `error`, or `inherit`";
     pub(crate) const parse_patchable_function_entry: &str = "either two comma separated integers (total_nops,prefix_nops), with prefix_nops <= total_nops, or one integer (total_nops)";
     pub(crate) const parse_opt_panic_strategy: &str = parse_panic_strategy;
+    pub(crate) const parse_opt_overflow_checks: &str =
+        "either `none`, or checked/true/y/yes/on, or wrapping/false/n/no/off, or unchecked";
+    pub(crate) const parse_opt_fp_mode: &str =
+        "one of `strict` (default), `algebraic`/`reassociative`, or `fast`";
     pub(crate) const parse_relro_level: &str = "one of: `full`, `partial`, or `off`";
     pub(crate) const parse_sanitizers: &str = "comma separated list of sanitizers: `address`, `cfi`, `dataflow`, `hwaddress`, `kcfi`, `kernel-address`, `leak`, `memory`, `memtag`, `safestack`, `shadow-call-stack`, `thread`, or 'realtime'";
     pub(crate) const parse_sanitizer_memory_track_origins: &str = "0, 1, or 2";
@@ -1191,6 +1196,35 @@ pub mod parse {
             Some("unwind") => *slot = Some(PanicStrategy::Unwind),
             Some("abort") => *slot = Some(PanicStrategy::Abort),
             Some("immediate-abort") => *slot = Some(PanicStrategy::ImmediateAbort),
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) fn parse_opt_overflow_checks(
+        slot: &mut Option<OverflowChecks>,
+        v: Option<&str>,
+    ) -> bool {
+        match v {
+            // keep it effectively a `bool` extensions, including `None` syntax
+            Some("y") | Some("yes") | Some("on") | Some("true") | Some("checked") | None => {
+                *slot = Some(OverflowChecks::Checked);
+            }
+            Some("n") | Some("no") | Some("off") | Some("false") | Some("wrapping") => {
+                *slot = Some(OverflowChecks::Wrapping);
+            }
+            Some("unchecked") => *slot = Some(OverflowChecks::Unchecked),
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) fn parse_opt_fp_mode(slot: &mut Option<FloatMathMode>, v: Option<&str>) -> bool {
+        match v {
+            Some("strict") => *slot = Some(FloatMathMode::Strict),
+            Some("reassociative") | Some("algebraic") => *slot = Some(FloatMathMode::Algebraic),
+            // some people think it is not "fast" but "ffast"
+            Some("fast") | Some("ffast") => *slot = Some(FloatMathMode::Fast),
             _ => return false,
         }
         true
@@ -2087,6 +2121,8 @@ options! {
     ar: String = (String::new(), parse_string, [UNTRACKED],
         "this option is deprecated and does nothing",
         deprecated_do_nothing: true),
+    bounds_checks: Option<bool> = (None, parse_opt_bool, [TRACKED],
+        "disable bounds checks for runtime slice/array indexing"),
     #[rustc_lint_opt_deny_field_access("use `Session::code_model` instead of this field")]
     code_model: Option<CodeModel> = (None, parse_code_model, [TRACKED],
         "choose the code model to use (`rustc --print code-models` for details)"),
@@ -2118,6 +2154,8 @@ options! {
     #[rustc_lint_opt_deny_field_access("use `Session::must_emit_unwind_tables` instead of this field")]
     force_unwind_tables: Option<bool> = (None, parse_opt_bool, [TRACKED],
         "force use of unwind tables"),
+    fp_mode: Option<FloatMathMode> = (None, parse_opt_fp_mode, [TRACKED],
+        "enable fast/algebraic floating point math for optimizations"),
     incremental: Option<String> = (None, parse_opt_string, [UNTRACKED],
         "enable incremental compilation"),
     #[rustc_lint_opt_deny_field_access("documented to do nothing")]
@@ -2130,6 +2168,8 @@ options! {
         "instrument the generated code to support LLVM source-based code coverage reports \
         (note, the compiler build config must include `profiler = true`); \
         implies `-C symbol-mangling-version=v0`"),
+    integer_div_checks: Option<bool> = (None, parse_opt_bool, [TRACKED],
+        "emit zero division / underflow checks for integers"),
     jump_tables: bool = (true, parse_bool, [TRACKED],
         "allow jump table and lookup table generation from switch case lowering (default: yes)"),
     link_arg: (/* redirected to link_args */) = ((), parse_string_push, [UNTRACKED],
@@ -2173,7 +2213,7 @@ options! {
     opt_level: String = ("0".to_string(), parse_string, [TRACKED],
         "optimization level (0-3, s, or z; default: 0)"),
     #[rustc_lint_opt_deny_field_access("use `Session::overflow_checks` instead of this field")]
-    overflow_checks: Option<bool> = (None, parse_opt_bool, [TRACKED],
+    overflow_checks: Option<OverflowChecks> = (None, parse_opt_overflow_checks, [TRACKED],
         "use overflow checks for integer arithmetic"),
     #[rustc_lint_opt_deny_field_access("use `Session::panic_strategy` instead of this field")]
     panic: Option<PanicStrategy> = (None, parse_opt_panic_strategy, [TRACKED],

@@ -5,6 +5,7 @@ use rustc_middle::ty::layout::{HasTyCtxt, HasTypingEnv, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt};
 use rustc_middle::{bug, mir, span_bug};
 use rustc_session::config::OptLevel;
+use rustc_target::spec::FloatMathMode;
 use tracing::{debug, instrument};
 
 use super::FunctionCx;
@@ -755,7 +756,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         match op {
             mir::BinOp::Add => {
                 if is_float {
-                    bx.fadd(lhs, rhs)
+                    match bx.sess().fp_mode() {
+                        FloatMathMode::Strict => bx.fadd(lhs, rhs),
+                        FloatMathMode::Algebraic => bx.fadd_algebraic(lhs, rhs),
+                        FloatMathMode::Fast => bx.fadd_fast(lhs, rhs),
+                    }
                 } else {
                     bx.add(lhs, rhs)
                 }
@@ -769,7 +774,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
             mir::BinOp::Sub => {
                 if is_float {
-                    bx.fsub(lhs, rhs)
+                    match bx.sess().fp_mode() {
+                        FloatMathMode::Strict => bx.fsub(lhs, rhs),
+                        FloatMathMode::Algebraic => bx.fsub_algebraic(lhs, rhs),
+                        FloatMathMode::Fast => bx.fsub_fast(lhs, rhs),
+                    }
                 } else {
                     bx.sub(lhs, rhs)
                 }
@@ -783,7 +792,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
             mir::BinOp::Mul => {
                 if is_float {
-                    bx.fmul(lhs, rhs)
+                    match bx.sess().fp_mode() {
+                        FloatMathMode::Strict => bx.fmul(lhs, rhs),
+                        FloatMathMode::Algebraic => bx.fmul_algebraic(lhs, rhs),
+                        FloatMathMode::Fast => bx.fmul_fast(lhs, rhs),
+                    }
                 } else {
                     bx.mul(lhs, rhs)
                 }
@@ -797,7 +810,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
             mir::BinOp::Div => {
                 if is_float {
-                    bx.fdiv(lhs, rhs)
+                    match bx.sess().fp_mode() {
+                        FloatMathMode::Strict => bx.fdiv(lhs, rhs),
+                        FloatMathMode::Algebraic => bx.fdiv_algebraic(lhs, rhs),
+                        FloatMathMode::Fast => bx.fdiv_fast(lhs, rhs),
+                    }
                 } else if is_signed {
                     bx.sdiv(lhs, rhs)
                 } else {
@@ -806,7 +823,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
             mir::BinOp::Rem => {
                 if is_float {
-                    bx.frem(lhs, rhs)
+                    match bx.sess().fp_mode() {
+                        FloatMathMode::Strict => bx.frem(lhs, rhs),
+                        FloatMathMode::Algebraic => bx.frem_algebraic(lhs, rhs),
+                        FloatMathMode::Fast => bx.frem_fast(lhs, rhs),
+                    }
                 } else if is_signed {
                     bx.srem(lhs, rhs)
                 } else {

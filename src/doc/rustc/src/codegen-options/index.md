@@ -481,11 +481,42 @@ overflow](../../reference/expressions/operator-expr.md#overflow). When
 overflow-checks are enabled, a panic will occur on overflow. This flag takes
 one of the following values:
 
-* `y`, `yes`, `on`, `true` or no value: enable overflow checks.
-* `n`, `no`, `off` or `false`: disable overflow checks.
+* `checked`, `y`, `yes`, `on`, `true` or no value: enable overflow checks.
+* `wrapping`, `n`, `no`, `off`, `false`: disable overflow checks, wrapping on overflow.
+* `unchecked`: disable overflow checks, but undefine overflow instead of wrapping.
+
+Using `unchecked` option is unsafe and might result in undefined runtime behavior.
+
+## integer-div-checks
+
+This flag allows you to control the behavior of runtime integer
+division checks. When enabled (deafault), a panic will occur on zero division/underflow. This flag takes
+one of the following values:
+
+* `y`, `yes`, `on`, `true` or no value: enable integer division checks  (default).
+* `n`, `no`, `off`, `false`: disable integer division checks. Zero division or underflow will result in undefined runtime
+behavior.
 
 If not specified, overflow checks are enabled if
 [debug-assertions](#debug-assertions) are enabled, disabled otherwise.
+
+Turning off integer division checks is unsafe and might result in undefined runtime behavior.
+
+## fp-mode
+
+* `n`, `no`, `off`, `false`,`strict`: or no value: no fast math (i.e. default).
+* `fast`: enable fast math. Acts similarly to "-ffast-math" in many languages.
+* `algebraic`/`reassociative`: enable algebraic math. Acts similarly to `fast`, but less powerful.
+
+Using anything other than strict option of this flag is unsafe and might result in undefined runtime behavior.
+
+## bounds-checks
+
+* `n`, `no`, `off` or `false`: or no value: slice bounds checking is kept.
+* `y`, `yes`, `on`, `true`: remove slice bounds checking. Accessing slice out-of-bounds is now UB.
+
+Turning off bounds checks is unsafe and might result in undefined runtime behavior.
+
 
 ## panic
 

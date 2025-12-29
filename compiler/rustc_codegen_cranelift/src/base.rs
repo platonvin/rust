@@ -365,7 +365,7 @@ fn codegen_fn_body(fx: &mut FunctionCx<'_, '_, '_>, start_block: Block) {
                 crate::abi::codegen_return(fx);
             }
             TerminatorKind::Assert { cond, expected, msg, target, unwind } => {
-                if !fx.tcx.sess.overflow_checks() && msg.is_optional_overflow_check() {
+                if !fx.tcx.sess.is_overflow_checked() && msg.is_optional_overflow_check() {
                     let target = fx.get_block(*target);
                     fx.bcx.ins().jump(target, &[]);
                     continue;

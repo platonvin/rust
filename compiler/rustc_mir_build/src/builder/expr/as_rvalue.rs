@@ -98,7 +98,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         this.as_operand(block, scope, arg, LocalInfo::Boring, NeedsTemporary::No)
                 );
                 // Check for -MIN on signed integers
-                if this.check_overflow && op == UnOp::Neg && expr.ty.is_signed() {
+                if this.check_overflow.is_checked() && op == UnOp::Neg && expr.ty.is_signed() {
                     let bool_ty = this.tcx.types.bool;
 
                     let minval = this.minval_literal(expr_span, expr.ty);
@@ -504,7 +504,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let source_info = self.source_info(span);
         let bool_ty = self.tcx.types.bool;
         let rvalue = match op {
-            BinOp::Add | BinOp::Sub | BinOp::Mul if self.check_overflow && ty.is_integral() => {
+            BinOp::Add | BinOp::Sub | BinOp::Mul
+                if self.check_overflow.is_checked() && ty.is_integral() =>
+            {
                 let result_tup = Ty::new_tup(self.tcx, &[ty, bool_ty]);
                 let result_value = self.temp(result_tup, span);
 
@@ -528,7 +530,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                 Rvalue::Use(Operand::Move(val))
             }
-            BinOp::Shl | BinOp::Shr if self.check_overflow && ty.is_integral() => {
+            BinOp::Shl | BinOp::Shr if self.check_overflow.is_checked() && ty.is_integral() => {
                 // For an unsigned RHS, the shift is in-range for `rhs < bits`.
                 // For a signed RHS, `IntToInt` cast to the equivalent unsigned
                 // type and do that same comparison.
@@ -581,63 +583,81 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // Checking division and remainder is more complex, since we 1. always check
                 // and 2. there are two possible failure cases, divide-by-zero and overflow.
 
-                let zero_err = if op == BinOp::Div {
-                    AssertKind::DivisionByZero(lhs.to_copy())
-                } else {
-                    AssertKind::RemainderByZero(lhs.to_copy())
-                };
-                let overflow_err = AssertKind::Overflow(op, lhs.to_copy(), rhs.to_copy());
+                if self.integer_div_checks {
+                    let zero_err = if op == BinOp::Div {
+                        AssertKind::DivisionByZero(lhs.to_copy())
+                    } else {
+                        AssertKind::RemainderByZero(lhs.to_copy())
+                    };
+                    let overflow_err = AssertKind::Overflow(op, lhs.to_copy(), rhs.to_copy());
 
-                // Check for / 0
-                let is_zero = self.temp(bool_ty, span);
-                let zero = self.zero_literal(span, ty);
-                self.cfg.push_assign(
-                    block,
-                    source_info,
-                    is_zero,
-                    Rvalue::BinaryOp(BinOp::Eq, Box::new((rhs.to_copy(), zero))),
-                );
-
-                block = self.assert(block, Operand::Move(is_zero), false, zero_err, span);
-
-                // We only need to check for the overflow in one case:
-                // MIN / -1, and only for signed values.
-                if ty.is_signed() {
-                    let neg_1 = self.neg_1_literal(span, ty);
-                    let min = self.minval_literal(span, ty);
-
-                    let is_neg_1 = self.temp(bool_ty, span);
-                    let is_min = self.temp(bool_ty, span);
-                    let of = self.temp(bool_ty, span);
-
-                    // this does (rhs == -1) & (lhs == MIN). It could short-circuit instead
-
+                    // Check for / 0
+                    let is_zero = self.temp(bool_ty, span);
+                    let zero = self.zero_literal(span, ty);
                     self.cfg.push_assign(
                         block,
                         source_info,
-                        is_neg_1,
-                        Rvalue::BinaryOp(BinOp::Eq, Box::new((rhs.to_copy(), neg_1))),
-                    );
-                    self.cfg.push_assign(
-                        block,
-                        source_info,
-                        is_min,
-                        Rvalue::BinaryOp(BinOp::Eq, Box::new((lhs.to_copy(), min))),
+                        is_zero,
+                        Rvalue::BinaryOp(BinOp::Eq, Box::new((rhs.to_copy(), zero))),
                     );
 
-                    let is_neg_1 = Operand::Move(is_neg_1);
-                    let is_min = Operand::Move(is_min);
-                    self.cfg.push_assign(
-                        block,
-                        source_info,
-                        of,
-                        Rvalue::BinaryOp(BinOp::BitAnd, Box::new((is_neg_1, is_min))),
-                    );
+                    block = self.assert(block, Operand::Move(is_zero), false, zero_err, span);
 
-                    block = self.assert(block, Operand::Move(of), false, overflow_err, span);
+                    // We only need to check for the overflow in one case:
+                    // MIN / -1, and only for signed values.
+                    if ty.is_signed() {
+                        let neg_1 = self.neg_1_literal(span, ty);
+                        let min = self.minval_literal(span, ty);
+
+                        let is_neg_1 = self.temp(bool_ty, span);
+                        let is_min = self.temp(bool_ty, span);
+                        let of = self.temp(bool_ty, span);
+
+                        // this does (rhs == -1) & (lhs == MIN). It could short-circuit instead
+
+                        self.cfg.push_assign(
+                            block,
+                            source_info,
+                            is_neg_1,
+                            Rvalue::BinaryOp(BinOp::Eq, Box::new((rhs.to_copy(), neg_1))),
+                        );
+                        self.cfg.push_assign(
+                            block,
+                            source_info,
+                            is_min,
+                            Rvalue::BinaryOp(BinOp::Eq, Box::new((lhs.to_copy(), min))),
+                        );
+
+                        let is_neg_1 = Operand::Move(is_neg_1);
+                        let is_min = Operand::Move(is_min);
+                        self.cfg.push_assign(
+                            block,
+                            source_info,
+                            of,
+                            Rvalue::BinaryOp(BinOp::BitAnd, Box::new((is_neg_1, is_min))),
+                        );
+
+                        block = self.assert(block, Operand::Move(of), false, overflow_err, span);
+                    }
                 }
 
                 Rvalue::BinaryOp(op, Box::new((lhs, rhs)))
+            }
+
+            // all the ones that can turn into Unchecked
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Shl | BinOp::Shr
+                if (ty.is_integral() && self.check_overflow.is_unchecked()) =>
+            {
+                let bin_op = match op {
+                    BinOp::Add => BinOp::AddUnchecked,
+                    BinOp::Sub => BinOp::SubUnchecked,
+                    BinOp::Mul => BinOp::MulUnchecked,
+                    BinOp::Shl => BinOp::ShlUnchecked,
+                    BinOp::Shr => BinOp::ShrUnchecked,
+                    // no div - controlled separately
+                    _ => unreachable!(),
+                };
+                Rvalue::BinaryOp(bin_op, Box::new((lhs, rhs)))
             }
             _ => Rvalue::BinaryOp(op, Box::new((lhs, rhs))),
         };

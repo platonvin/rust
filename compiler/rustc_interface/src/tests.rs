@@ -610,6 +610,7 @@ fn test_codegen_options_tracking_hash() {
 
     // Make sure that changing a [TRACKED] option changes the hash.
     // tidy-alphabetical-start
+    tracked!(bounds_checks, Some(false));
     tracked!(code_model, Some(CodeModel::Large));
     tracked!(collapse_macro_debuginfo, CollapseMacroDebuginfo::Yes);
     tracked!(control_flow_guard, CFGuard::Checks);
@@ -619,7 +620,9 @@ fn test_codegen_options_tracking_hash() {
     tracked!(embed_bitcode, false);
     tracked!(force_frame_pointers, FramePointer::Always);
     tracked!(force_unwind_tables, Some(true));
+    tracked!(fp_mode, Some("fast"));
     tracked!(instrument_coverage, InstrumentCoverage::Yes);
+    tracked!(integer_div_checks, Some(false));
     tracked!(jump_tables, false);
     tracked!(link_dead_code, Some(true));
     tracked!(linker_plugin_lto, LinkerPluginLto::LinkerPluginAuto);
@@ -631,7 +634,7 @@ fn test_codegen_options_tracking_hash() {
     tracked!(no_vectorize_loops, true);
     tracked!(no_vectorize_slp, true);
     tracked!(opt_level, "3".to_string());
-    tracked!(overflow_checks, Some(true));
+    tracked!(overflow_checks, Some(OverflowChecks::Wrapping));
     tracked!(panic, Some(PanicStrategy::Abort));
     tracked!(passes, vec![String::from("1"), String::from("2")]);
     tracked!(prefer_dynamic, true);

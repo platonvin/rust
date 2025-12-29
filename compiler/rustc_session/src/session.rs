@@ -29,9 +29,9 @@ use rustc_span::source_map::{FilePathMapping, SourceMap};
 use rustc_span::{RealFileName, Span, Symbol};
 use rustc_target::asm::InlineAsmArch;
 use rustc_target::spec::{
-    Arch, CodeModel, DebuginfoKind, Os, PanicStrategy, RelocModel, RelroLevel, SanitizerSet,
-    SmallDataThresholdSupport, SplitDebuginfo, StackProtector, SymbolVisibility, Target,
-    TargetTuple, TlsModel, apple,
+    Arch, CodeModel, DebuginfoKind, FloatMathMode, Os, OverflowChecks, PanicStrategy, RelocModel,
+    RelroLevel, SanitizerSet, SmallDataThresholdSupport, SplitDebuginfo, StackProtector,
+    SymbolVisibility, Target, TargetTuple, TlsModel, apple,
 };
 
 use crate::code_stats::CodeStats;
@@ -669,8 +669,34 @@ impl Session {
         self.opts.unstable_features.is_nightly_build()
     }
 
-    pub fn overflow_checks(&self) -> bool {
-        self.opts.cg.overflow_checks.unwrap_or(self.opts.debug_assertions)
+    /// Returns the overflow strategy.
+    pub fn overflow_checks(&self) -> OverflowChecks {
+        self.opts.cg.overflow_checks.unwrap_or(if self.opts.debug_assertions {
+            OverflowChecks::Checked
+        } else {
+            OverflowChecks::Wrapping
+        })
+    }
+
+    /// Returns wether overflow strategy is "checked"
+    pub fn is_overflow_checked(&self) -> bool {
+        // `overflow_checks` to handle default
+        match self.overflow_checks() {
+            OverflowChecks::Checked => true,
+            _ => false,
+        }
+    }
+
+    pub fn fp_mode(&self) -> FloatMathMode {
+        self.opts.cg.fp_mode.unwrap_or(FloatMathMode::Strict)
+    }
+
+    pub fn bounds_checks(&self) -> bool {
+        self.opts.cg.bounds_checks.unwrap_or(true)
+    }
+
+    pub fn integer_div_checks(&self) -> bool {
+        self.opts.cg.integer_div_checks.unwrap_or(true)
     }
 
     pub fn ub_checks(&self) -> bool {

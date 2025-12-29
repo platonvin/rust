@@ -840,6 +840,55 @@ crate::target_spec_enum! {
     parse_error_type = "panic strategy";
 }
 
+crate::target_spec_enum! {
+    #[derive(Encodable, BlobDecodable, HashStable_Generic)]
+    pub enum OverflowChecks {
+        Checked = "checked",
+        Wrapping = "wrapping",
+        Unchecked = "unchecked",
+    }
+
+    parse_error_type = "overflow checks";
+}
+
+impl OverflowChecks {
+    /// Sets the overflow check to strictest of (self, other)
+    pub fn restrict_with(&mut self, other: Self) {
+        let stricter = match (*self, other) {
+            (OverflowChecks::Checked, _anything_else) => OverflowChecks::Checked,
+            (OverflowChecks::Wrapping, OverflowChecks::Checked) => OverflowChecks::Checked,
+            (OverflowChecks::Wrapping, OverflowChecks::Wrapping) => OverflowChecks::Wrapping,
+            (OverflowChecks::Wrapping, OverflowChecks::Unchecked) => OverflowChecks::Wrapping,
+            (OverflowChecks::Unchecked, anything_else) => anything_else,
+        };
+        *self = stricter;
+    }
+
+    pub fn is_checked(&self) -> bool {
+        match self {
+            OverflowChecks::Checked => true,
+            _ => false,
+        }
+    }
+    pub fn is_unchecked(&self) -> bool {
+        match self {
+            OverflowChecks::Unchecked => true,
+            _ => false,
+        }
+    }
+}
+
+crate::target_spec_enum! {
+    #[derive(Encodable, BlobDecodable, HashStable_Generic)]
+    pub enum FloatMathMode {
+        Strict = "strict",
+        Algebraic = "algebraic",
+        Fast = "fast",
+    }
+
+    parse_error_type = "floating point precision";
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Encodable, BlobDecodable, HashStable_Generic)]
 pub enum OnBrokenPipe {
     Default,

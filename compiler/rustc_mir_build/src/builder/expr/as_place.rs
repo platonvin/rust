@@ -640,7 +640,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let index_lifetime = self.region_scope_tree.temporary_scope(self.thir[index].temp_scope_id);
         let idx = unpack!(block = self.as_temp(block, index_lifetime, index, Mutability::Not));
 
-        block = self.bounds_check(block, &base_place, idx, expr_span, source_info);
+        if self.bounds_checks {
+            block = self.bounds_check(block, &base_place, idx, expr_span, source_info);
+        } else {
+            // no bounds checking
+        }
 
         if is_outermost_index {
             self.read_fake_borrows(block, fake_borrow_temps, source_info)

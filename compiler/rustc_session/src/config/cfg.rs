@@ -201,7 +201,7 @@ pub(crate) fn default_configuration(sess: &Session) -> Cfg {
         }
     }
 
-    if sess.overflow_checks() {
+    if sess.is_overflow_checked() {
         ins_none!(sym::overflow_checks);
     }
 
